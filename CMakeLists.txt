@@ -64,7 +64,7 @@ if ( MSVC )
 		"/MP"               # multi-threaded compilation
 		"/permissive-"      # make MSVC very compliant
 		"/Zc:__cplusplus"   # set the __cplusplus macro to be the correct version
-		# "/fp:fast"          # fast floating point model
+		# "/fp:fast"        # fast floating point model
 		"/GF"               # string pooling: allows compiler to create a single copy of identical strings in the program image and in memory during execution
 		
 		# disable stupid warnings
@@ -158,13 +158,13 @@ if ( MSVC )
 	configure_file( "thirdparty/libfyaml/build/Release/fyaml.dll" "${PROJ_OUT}/fyaml.dll" COPYONLY )
 	
 	message( "Copying jxl" )
-	configure_file( "thirdparty/libjxl/build/lib/Release/jxl.dll" "${PROJ_OUT}/jxl.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/Release/jxl_cms.dll" "${PROJ_OUT}/jxl_cms.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/Release/jxl_threads.dll" "${PROJ_OUT}/jxl_threads.dll" COPYONLY )
+	configure_file( "thirdparty/jxl/bin/jxl.dll" "${PROJ_OUT}/jxl.dll" COPYONLY )
+	configure_file( "thirdparty/jxl/bin/jxl_cms.dll" "${PROJ_OUT}/jxl_cms.dll" COPYONLY )
+	configure_file( "thirdparty/jxl/bin/jxl_threads.dll" "${PROJ_OUT}/jxl_threads.dll" COPYONLY )
 	
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/Release/brotlicommon.dll" "${PROJ_OUT}/brotlicommon.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/Release/brotlidec.dll" "${PROJ_OUT}/brotlidec.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/Release/brotlienc.dll" "${PROJ_OUT}/brotlienc.dll" COPYONLY )
+	configure_file( "thirdparty/jxl/bin/brotlicommon.dll" "${PROJ_OUT}/brotlicommon.dll" COPYONLY )
+	configure_file( "thirdparty/jxl/bin/brotlidec.dll" "${PROJ_OUT}/brotlidec.dll" COPYONLY )
+	configure_file( "thirdparty/jxl/bin/brotlienc.dll" "${PROJ_OUT}/brotlienc.dll" COPYONLY )
 
 	#message( "Copying mimalloc" )
 	#configure_file( "thirdparty/mimalloc/out/msvc-x64/Release/mimalloc-redirect.dll" "${PROJ_OUT}/mimalloc-redirect.dll" COPYONLY )
@@ -283,6 +283,16 @@ file(
 	thirdparty/*.hpp
 )
 
+if ( USE_SHARED_LIBS )
+    message( STATUS "Linking against SHARED DLL libraries" )
+    # Point to directories containing the .lib import libraries for the DLLs
+    set( FREETYPE_LIB_DIR "thirdparty/freetype/release dll/x64" )
+else()
+    message( STATUS "Linking against STATIC libraries" )
+    # Point to your static build folder (e.g., vs2026)
+    set( FREETYPE_LIB_DIR "thirdparty/freetype/release static/vs2026/x64" )
+endif()
+
 include_directories(
 	"src/"
 	"src/imgui"
@@ -297,9 +307,11 @@ include_directories(
 	"thirdparty/FreeImageRe/include"
 	"thirdparty/stb"
 	"thirdparty/libfyaml/include"
-	"thirdparty/libjxl/lib/include"
-	"thirdparty/libjxl/build/lib/include"
+	"thirdparty/jxl/include"
+	"${FREETYPE_DIR}/include"
 )
+
+add_compile_definitions( IMGUI_ENABLE_FREETYPE=1 )
 
 if( LINUX )
 	include_directories(
@@ -339,13 +351,14 @@ link_directories(
 	"thirdparty/libspng/build"
 	"thirdparty/FreeImageRe/lib"
 	"thirdparty/libfyaml/build"
+	"${FREETYPE_LIB_DIR}"
 )
 
 if ( WIN32 )
 	link_directories(
 		"thirdparty/libspng/build/Release"
 		"thirdparty/libfyaml/build/Release"
-		"thirdparty/libjxl/build/lib/Release"
+		"thirdparty/jxl/lib"
 		"thirdparty/SDL3/lib/x64"
 	)
 	link_libraries(
@@ -362,7 +375,6 @@ endif()
 
 foreach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
 	link_directories(
-		"${FREETYPE_DIR}/objs/x64/${OUTPUT_CONFIG} Static"
 		"thirdparty/nativefiledialog/build/src/${OUTPUT_CONFIG}"
 		"thirdparty/mozjpeg/build/${OUTPUT_CONFIG}"
 		# "thirdparty/libfyaml/build/${OUTPUT_CONFIG}"
