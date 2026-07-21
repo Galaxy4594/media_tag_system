@@ -10,6 +10,9 @@ from urllib.request import Request, urlopen
 from zipfile import ZipFile
 import tarfile
 from typing import List, Dict, BinaryIO
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
+PRINT_LOCK = threading.Lock()
 
 # -------------------------------------------------------------------------
 # Script made to download thirdparty stuff quickly
@@ -108,6 +111,7 @@ def win32_set_fore_color(color: int):
 
 
 def stdout_color(color: Color, *text):
+  with PRINT_LOCK:
     if _win32_legacy_con:
         win32_set_fore_color(int(color.value))
         sys.stdout.write("".join(text))
@@ -410,30 +414,22 @@ def compile_libfyaml():
     print("Building libfyaml - Debug\n")
     if not syscmd(f"cmake --build ./build --config Debug", "Failed to build in Debug"):
         return
-        return
 
 
 # =================================================================================================
 
 
-def libjxl_run():
-    set_project("jxl")
-
+def libjxl_fetch():
     # Stable version of libjxl to use
     branch = "v0.11.x"
 
-    # TODO: implement a global basic version check system for tasks
-    # check version
     redownload = False
     if os.path.isdir("libjxl"):
         if os.path.isfile("libjxl/IMAGE_VIEW_VERSION"):
-            version = ""
             with open("libjxl/IMAGE_VIEW_VERSION", "r") as version_io:
-                version = version_io.read()
-
-            if version != branch:
-                print_color(Color.YELLOW, "JXL: Version mismatch: got version {version}, expected {branch}")
-                redownload = True
+                if version_io.read() != branch:
+                    print_color(Color.YELLOW, f"JXL: Version mismatch, expected {branch}")
+                    redownload = True
         else:
             print_color(Color.YELLOW, "JXL: Version file not found, redownloading!")
             redownload = True
@@ -458,6 +454,8 @@ def libjxl_run():
         # add spacing
         print()
 
+def libjxl_build():
+    set_project("jxl")
     os.chdir("libjxl")
 
     defines = "-DBUILD_SHARED_LIBS=ON -DJPEGXL_ENABLE_FUZZERS=OFF -DCXX_FUZZERS_SUPPORTED=OFF -DJPEGXL_ENABLE_DOXYGEN=ON -DJPEGXL_ENABLE_MANPAGES=ON -DJPEGXL_ENABLE_EXAMPLES=ON -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_OPENEXR=OFF -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF -DBUILD_TESTING=OFF -DJPEGXL_ENABLE_JPEGLI=OFF -DJPEGXL_ENABLE_JPEGLI_LIBJPEG=OFF -DJPEGXL_ENABLE_TOOLS=OFF"
@@ -576,7 +574,8 @@ TASK_LIST = {
         },
         {
             "name": "jxl",
-            "func": libjxl_run,
+            "fetch_func": libjxl_fetch,
+            "func": libjxl_build,
         },
     ],
 
@@ -704,70 +703,84 @@ def extract_file(tmp_file: str, file_ext: str, tmp_folder: str, folder: str, use
     return return_value
 
 
-def handle_item(item: dict):
-    url = item["url"] if "url" in item else ""
-    file = item["file"] if "file" in item else ""
-    name = item["name"] if "name" in item else ""
-    func = item["func"] if "func" in item else None
-    extracted_folder = item["extracted_folder"] if "extracted_folder" in item else None
-    extract_folder = item["extract_folder"] if "extract_folder" in item else "."
-    user_extract = item["user_extract"] if "user_extract" in item else False
+def fetch_item(item: dict):
+    name = item.get("name", "")
+    if ARGS.target is not None and name not in ARGS.target:
+        return
 
-    # Check if we want this item
-    if ARGS.target is not None:
-        if name not in ARGS.target:
-            return
+    # 1. Run custom fetch functions (like git clone for libjxl)
+    if "fetch_func" in item and item["fetch_func"]:
+        print_color(Color.CYAN, f"Fetching Task: \"{name}\"")
+        try:
+            item["fetch_func"]()
+        except Exception as e:
+            with PRINT_LOCK:
+                print(f"Fetch Function Crashed for {name}: {e}")
+        return
 
-    if file:
-        # folder, file_ext = os.path.splitext(file)
-        folder, file_ext = file.rsplit(".", 1)
-        is_zip = file_ext in ("zip", "7z", "xz", "gz")
+    # 2. Standard URL/Archive downloading
+    file = item.get("file", "")
+    url = item.get("url", "")
+    if not file:
+        return
 
-        if not url:
-            error = f"Project \"{name}\" Has a download file specified, but no url to download it!"
+    folder, file_ext = file.rsplit(".", 1)
+    is_zip = file_ext in ("zip", "7z", "xz", "gz")
+
+    if not url:
+        error = f"Project \"{name}\" has a file specified, but no url!"
+        with PRINT_LOCK:
             ERROR_LIST.append(error)
-            sys.stderr.write(error)
+        return
+
+    if folder.endswith(".tar"):
+        folder = folder.rsplit(".", 1)[0]
+    folder = item.get("extracted_folder", folder)
+    extract_folder = item.get("extract_folder", ".")
+    user_extract = item.get("user_extract", False)
+
+    if not os.path.isdir(name) or ARGS.force or not is_zip:
+        print_color(Color.CYAN, f"Downloading \"{name}\"")
+        file_data: bytes = download_file(url)
+        if file_data == b"":
             return
 
-        # HACK
-        if folder.endswith(".tar"):
-            folder = folder.rsplit(".", 1)[0]
+        tmp_file = file if (user_extract or not is_zip) else "tmp." + file
+        if not write_file(tmp_file, file_data):
+            return
 
-        if extracted_folder:
-            folder = extracted_folder
-
-        if not os.path.isdir(name) or ARGS.force or not is_zip:
-            print_color(Color.CYAN, f"Downloading \"{name}\"")
-
-            file_data: bytes = download_file(url)
-            if file_data == b"":
+        # DEFER USER EXTRACT: Don't call input() inside a background thread!
+        if is_zip and not user_extract:
+            if not extract_file(tmp_file, file_ext, folder, extract_folder, False):
                 return
+            if folder != name and extract_folder == ".":
+                os.rename(folder, name)
+    else:
+        print_color(Color.CYAN, f"Already Downloaded: {name}")
 
-            if user_extract or not is_zip:
-                tmp_file = file
-            else:
-                tmp_file = "tmp." + file
 
-            if not write_file(tmp_file, file_data):
-                return False
+def build_item(item: dict):
+    name = item.get("name", "")
+    if ARGS.target is not None and name not in ARGS.target:
+        return
 
-            if is_zip:
-                if not extract_file(tmp_file, file_ext, folder, extract_folder, user_extract):
-                    return
+    # Catch any deferred user extractions (like mpv) here on the main thread
+    if item.get("user_extract", False):
+        file = item.get("file", "")
+        folder = item.get("extracted_folder", file.rsplit(".", 1)[0])
+        if os.path.exists(file):
+            extract_file_user(file, folder)
+            os.remove(file)
 
-                # rename it
-                if folder != name and extract_folder == ".":
-                    os.rename(folder, name)
-
-        else:
-            print_color(Color.CYAN, f"Already Downloaded: {name}")
-
+    func = item.get("func", None)
     if func:
         print_color(Color.CYAN, f"Running Task Function: \"{name}\"")
         try:
             func()
         except Exception as e:
             print(f"Task Function Crashed with error: {e}")
+        finally:
+            reset_dir() # Ensure we always reset directory after a build
 
 
 def main():
@@ -775,31 +788,47 @@ def main():
         print("NOT IMPLEMENTED YET!!!")
         return
 
-    # Do your platform first (need to be first on windows for vswhere.exe)
+    # Combine all relevant tasks for this OS
+    active_tasks = TASK_LIST[SYS_OS] + TASK_LIST[OS.Any]
+
+    print_color(Color.GREEN, "\n--- PHASE 1: Concurrent Downloading & Extracting ---\n")
+    
+    # Run all downloads and extractions concurrently using 8 worker threads
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = [executor.submit(fetch_item, item) for item in active_tasks]
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except BaseException as e:
+                err_msg = f"Thread execution failed: {e}\n"
+                with PRINT_LOCK:
+                    sys.stderr.write(err_msg)
+                    ERROR_LIST.append(err_msg)
+
+    print_color(Color.GREEN, "\n--- PHASE 2: Compiling Libraries ---\n")
+
+    # Run platform-specific builds first (Critical for setting up vswhere on Windows!)
     for item in TASK_LIST[SYS_OS]:
-        handle_item(item)
+        build_item(item)
 
-    print("\n---------------------------------------------------------\n")
-
-    # Do all platforms last
+    # Run cross-platform builds second
     for item in TASK_LIST[OS.Any]:
-        handle_item(item)
-        reset_dir()
+        build_item(item)
 
-    # check for any errors and print them
+    # Check for errors
     errors_str = "Error" if len(ERROR_LIST) == 1 else "Errors"
     if len(ERROR_LIST) > 0:
         print("\n---------------------------------------------------------")
         sys.stderr.write(f"\n{len(ERROR_LIST)} {errors_str}:\n")
-        for error in ERROR_LIST:
-            sys.stderr.write(error)
+        for err in ERROR_LIST:
+            sys.stderr.write(err)
 
     print(f"\n"
           f"---------------------------------------------------------\n"
           f" Finished - {len(ERROR_LIST)} {errors_str}\n"
           f"---------------------------------------------------------\n")
 
-    if len(ERROR_LIST) > 1:
+    if len(ERROR_LIST) > 0:
         exit(-1)
 
 
