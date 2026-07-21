@@ -6,6 +6,7 @@
 #include <mutex>
 #include <queue>
 #include <unordered_map>
+#include <forward_list>
 
 constexpr int       MAX_THUMBNAILS    = 512;
 

@@ -554,8 +554,8 @@ media_entry_t                        gallery_view_get_last_selected_entry();
 
 void                                 media_history_add( const std::string& entry );
 void                                 folder_history_add( const fs::path& entry );
-const fs::path&                      folder_history_get_prev();
-const fs::path&                      folder_history_get_next();
+fs::path                             folder_history_get_prev();
+fs::path                             folder_history_get_next();
 bool                                 folder_history_nav_prev();
 bool                                 folder_history_nav_next();
 

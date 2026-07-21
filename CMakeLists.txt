@@ -188,6 +188,10 @@ else()  # linux
 	message( "Copying fyaml" )
 	configure_file( "thirdparty/libfyaml/build/libfyaml.so" "${PROJ_OUT}/libfyaml.so" COPYONLY )
 
+	message( "Copying SDL3" )
+	file( GLOB SDL3_LIBS "thirdparty/SDL3/build/libSDL3.so*" )
+	file( COPY ${SDL3_LIBS} DESTINATION "${PROJ_OUT}" )
+
 	message( "Copying jxl" )
 	configure_file( "thirdparty/libjxl/build/lib/libjxl.so" "${PROJ_OUT}/libjxl.so" COPYONLY )
 	configure_file( "thirdparty/libjxl/build/lib/libjxl_cms.so" "${PROJ_OUT}/libjxl_cms.so" COPYONLY )
@@ -283,14 +287,18 @@ file(
 	thirdparty/*.hpp
 )
 
-if ( USE_SHARED_LIBS )
-    message( STATUS "Linking against SHARED DLL libraries" )
-    # Point to directories containing the .lib import libraries for the DLLs
-    set( FREETYPE_LIB_DIR "thirdparty/freetype/release dll/x64" )
+if ( WIN32 )
+	if ( USE_SHARED_LIBS )
+		message( STATUS "Linking against SHARED DLL libraries" )
+		# Point to directories containing the .lib import libraries for the DLLs
+		set( FREETYPE_LIB_DIR "thirdparty/freetype/release dll/x64" )
+	else()
+		message( STATUS "Linking against STATIC libraries" )
+		# Point to your static build folder (e.g., vs2026)
+		set( FREETYPE_LIB_DIR "thirdparty/freetype/release static/vs2026/x64" )
+	endif()
 else()
-    message( STATUS "Linking against STATIC libraries" )
-    # Point to your static build folder (e.g., vs2026)
-    set( FREETYPE_LIB_DIR "thirdparty/freetype/release static/vs2026/x64" )
+	set( FREETYPE_LIB_DIR "thirdparty/freetype/build" )
 endif()
 
 include_directories(
@@ -307,15 +315,20 @@ include_directories(
 	"thirdparty/FreeImageRe/include"
 	"thirdparty/stb"
 	"thirdparty/libfyaml/include"
-	"thirdparty/jxl/include"
 	"${FREETYPE_DIR}/include"
 )
+
+if ( WIN32 )
+	include_directories(
+		"thirdparty/jxl/include"
+	)
+endif()
 
 add_compile_definitions( IMGUI_ENABLE_FREETYPE=1 )
 
 if( LINUX )
 	include_directories(
-		"/usr/include/SDL3"
+		"thirdparty/libjxl/build/lib/include"
 	)
 endif()
 
@@ -366,6 +379,9 @@ if ( WIN32 )
 	)
 elseif( LINUX )
 	link_directories(
+		"thirdparty/SDL3/build"
+		"thirdparty/libjxl/build/lib"
+		"thirdparty/libjxl/build/third_party/brotli"
 	)
 	link_libraries(
 		turbojpeg

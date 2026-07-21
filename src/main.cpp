@@ -314,7 +314,7 @@ void folder_history_add( const fs::path& entry )
 }
 
 
-const fs::path& folder_history_get_prev()
+fs::path folder_history_get_prev()
 {
 	if ( directory::folder_history.empty() || directory::folder_history_pos <= 1 )
 		return {};
@@ -323,7 +323,7 @@ const fs::path& folder_history_get_prev()
 }
 
 
-const fs::path& folder_history_get_next()
+fs::path folder_history_get_next()
 {
 	if ( directory::folder_history.empty() || directory::folder_history_pos == directory::folder_history.size() )
 		return {};

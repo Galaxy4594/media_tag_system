@@ -250,12 +250,55 @@ def post_mozjpeg_extract():
 
 # =================================================================================================
 
+def post_zlib_extract():
+	if ARGS.no_build:
+		return
+
+	set_project("zlib-ng")
+	os.chdir("zlib-ng")
+
+	build_options = "-DWITH_GTEST=OFF -DZLIB_COMPAT=ON"
+
+	if not syscmd(f"cmake -B build {build_options} .", "Failed to run cmake"):
+		return
+
+	print("Building zlib-ng - Release\n")
+	if not syscmd("cmake --build ./build --config Release --parallel", "Failed to build in Release"):
+		return
+
+# =================================================================================================
+
 def find_file_in_tree(root_dir: str, target_filename: str) -> str:
     """Helper to dynamically find where an archive extracted a specific header or lib."""
     for root, _, files in os.walk(root_dir):
         if target_filename in files:
             return os.path.join(root, target_filename)
     return ""
+
+
+def post_freetype_extract():
+    if ARGS.no_build:
+        return
+
+    set_project("Freetype")
+    os.chdir("freetype")
+
+    if SYS_OS == OS.Windows:
+        for cfg in {"Debug Static", "Release Static"}:
+            cmd = [VS_MSBUILD, "builds\\windows\\vc2010\\freetype.vcxproj", f"-property:Configuration={cfg}", "-property:Platform=x64"]
+            subprocess.call(cmd)
+    else:
+        cmake_cmd = (
+            "cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF "
+            "-DFT_DISABLE_ZLIB=TRUE -DFT_DISABLE_BZIP2=TRUE -DFT_DISABLE_PNG=TRUE "
+            "-DFT_DISABLE_HARFBUZZ=TRUE -DFT_DISABLE_BROTLI=TRUE ."
+        )
+        if not syscmd(cmake_cmd, "Failed to run cmake"):
+            return
+            
+        print("Building Freetype - Release\n")
+        if not syscmd("cmake --build ./build --config Release --parallel", "Failed to build in Release"):
+            return
 
 
 def post_libspng_extract():
@@ -348,6 +391,69 @@ def compile_libfyaml():
         return
 
 
+def libjxl_run():
+    set_project("jxl")
+
+    # Stable version of libjxl to use
+    branch = "v0.12.x"
+
+    # TODO: implement a global basic version check system for tasks
+    # check version
+    redownload = False
+    if os.path.isdir("libjxl"):
+        if os.path.isfile("libjxl/IMAGE_VIEW_VERSION"):
+            version = ""
+            with open("libjxl/IMAGE_VIEW_VERSION", "r") as version_io:
+                version = version_io.read()
+
+            if version != branch:
+                print_color(Color.YELLOW, f"JXL: Version mismatch: got version {version}, expected {branch}")
+                redownload = True
+        else:
+            print_color(Color.YELLOW, "JXL: Version file not found, redownloading!")
+            redownload = True
+
+    if redownload:
+        shutil.rmtree("libjxl")
+
+    if not os.path.isdir("libjxl"):
+        if not syscmd(f"git clone --depth 1 https://github.com/libjxl/libjxl.git -b {branch} --recursive --shallow-submodules", "Failed to clone libjxl with git"):
+            return
+
+        with open("libjxl/IMAGE_VIEW_VERSION", "w") as version_io:
+            version_io.write(branch)
+
+        # add spacing
+        print()
+
+    os.chdir("libjxl")
+
+    defines = "-DBUILD_SHARED_LIBS=ON -DJPEGXL_ENABLE_FUZZERS=OFF -DCXX_FUZZERS_SUPPORTED=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_OPENEXR=OFF -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF -DBUILD_TESTING=OFF -DJPEGXL_ENABLE_TOOLS=OFF"
+
+    if not syscmd(f"cmake -B build -DCMAKE_BUILD_TYPE=Release {defines}", "Failed to run cmake"):
+        return
+
+    print("Building jxl - Release\n")
+    if not syscmd("cmake --build ./build --config Release --parallel", "Failed to build in Release"):
+        return
+        
+    print("Building jxl - Debug\n")
+    if not syscmd("cmake --build ./build --config Debug --parallel", "Failed to build in Debug"):
+        return
+
+
+def compile_sdl3():
+    set_project("SDL3")
+    os.chdir("SDL3")
+
+    if not syscmd("cmake -B build -DCMAKE_BUILD_TYPE=Release -DSDL_STATIC=OFF -DSDL_SHARED=ON .", "Failed to run cmake"):
+        return
+
+    print("Building SDL3 - Release\n")
+    if not syscmd("cmake --build ./build --config Release --parallel", "Failed to build in Release"):
+        return
+
+
 # =================================================================================================
 
 def get_latest_mpv_release():
@@ -378,12 +484,6 @@ TASK_LIST = {
             "func": post_mozjpeg_extract,
         },
         {
-            "name": "zlib-ng",
-            "url":  "https://github.com/zlib-ng/zlib-ng/releases/download/2.2.5/zlib-ng-win-x86-64-compat.zip",
-            "file": "zlib-ng-win-x86-64-compat.zip",
-            "extract_folder": "zlib-ng",  # Added so it extracts into its own folder!
-        },
-        {
             "name": "libspng",
             "url":  "https://github.com/randy408/libspng/archive/v0.7.4.zip",
             "file": "libspng-0.7.4.zip",
@@ -405,6 +505,12 @@ TASK_LIST = {
 
     # Windows Only
     OS.Windows: [
+        {
+            "name": "zlib-ng",
+            "url":  "https://github.com/zlib-ng/zlib-ng/releases/download/2.2.5/zlib-ng-win-x86-64-compat.zip",
+            "file": "zlib-ng-win-x86-64-compat.zip",
+            "extract_folder": "zlib-ng",  # Added so it extracts into its own folder!
+        },
         {
             "name": "vswhere",
             "url":  "https://github.com/microsoft/vswhere/releases/download/2.8.4/vswhere.exe",
@@ -446,10 +552,33 @@ TASK_LIST = {
     # Linux Only
     OS.Linux: [
         {
+            "name": "zlib-ng",
+            "url":  "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.2.5.zip",
+            "file": "zlib-ng-2.2.5.zip",
+            "func": post_zlib_extract,
+        },
+        {
             "name": "FreeImageRe",
             "url":  "https://github.com/agruzdev/FreeImageRe/releases/download/v4.1.1/FreeImageRe-v4.1.1-linux64.zip",
             "extract_folder": "FreeImageRe",
             "file": "FreeImageRe-v4.1.1-linux64.zip",
+        },
+        {
+            "name": "freetype",
+            "url":  "https://nongnu.askapache.com/freetype/freetype-2.14.1.tar.xz",
+            "file": "freetype-2.14.1.tar.xz",
+            "func": post_freetype_extract,
+        },
+        {
+            "name": "jxl",
+            "func": libjxl_run,
+        },
+        {
+            "name": "SDL3",
+            "url":  "https://github.com/libsdl-org/SDL/archive/refs/tags/release-3.2.24.tar.gz",
+            "file": "SDL3-release-3.2.24.tar.gz",
+            "extracted_folder": "SDL-release-3.2.24",
+            "func": compile_sdl3,
         },
     ],
 }
@@ -555,6 +684,16 @@ def extract_file(tmp_file: str, file_ext: str, tmp_folder: str, folder: str, use
         res = subprocess.call(cmd)
         if res == 0:
             return_value = True
+            # Check if 7z decompressed an outer archive (e.g. .tar.xz) leaving an un-extracted .tar file
+            if os.path.isdir(folder):
+                for item in os.listdir(folder):
+                    if item.endswith(".tar"):
+                        tar_path = os.path.join(folder, item)
+                        try:
+                            shutil.unpack_archive(tar_path, extract_dir=folder)
+                            os.remove(tar_path)
+                        except Exception:
+                            pass
         else:
             print_color(Color.YELLOW, f"7z extraction returned exit code {res}. Attempting OS/Python fallback...")
 
@@ -639,6 +778,8 @@ def handle_item(item: dict):
             func()
         except Exception as e:
             print(f"Task Function Crashed with error: {e}")
+        finally:
+            reset_dir()
 
 
 def main():
@@ -648,6 +789,7 @@ def main():
 
     for item in TASK_LIST[SYS_OS]:
         handle_item(item)
+        reset_dir()
 
     print("\n---------------------------------------------------------\n")
 
