@@ -270,9 +270,14 @@ def post_zlib_extract():
 
 def find_file_in_tree(root_dir: str, target_filename: str) -> str:
     """Helper to dynamically find where an archive extracted a specific header or lib."""
+    if not os.path.exists(root_dir):
+        return ""
     for root, _, files in os.walk(root_dir):
         if target_filename in files:
             return os.path.join(root, target_filename)
+        for f in files:
+            if f.startswith(target_filename):
+                return os.path.join(root, f)
     return ""
 
 
@@ -475,13 +480,19 @@ mpv_url, mpv_file = get_latest_mpv_release()
 # =================================================================================================
 
 TASK_LIST = {
-    # All Platforms
-    OS.Any: [
+    # Windows Only
+    OS.Windows: [
         {
             "name": "mozjpeg",
             "url":  "https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.1.zip",
             "file": "mozjpeg-4.1.1.zip",
             "func": post_mozjpeg_extract,
+        },
+        {
+            "name": "zlib-ng",
+            "url":  "https://github.com/zlib-ng/zlib-ng/releases/download/2.2.5/zlib-ng-win-x86-64-compat.zip",
+            "file": "zlib-ng-win-x86-64-compat.zip",
+            "extract_folder": "zlib-ng",  # Added so it extracts into its own folder!
         },
         {
             "name": "libspng",
@@ -500,16 +511,6 @@ TASK_LIST = {
             "url":  "https://github.com/pantoniou/libfyaml/releases/download/v0.9.5/libfyaml-0.9.5.tar.gz",
             "file": "libfyaml-0.9.5.tar.gz",
             "func": compile_libfyaml,
-        },
-    ],
-
-    # Windows Only
-    OS.Windows: [
-        {
-            "name": "zlib-ng",
-            "url":  "https://github.com/zlib-ng/zlib-ng/releases/download/2.2.5/zlib-ng-win-x86-64-compat.zip",
-            "file": "zlib-ng-win-x86-64-compat.zip",
-            "extract_folder": "zlib-ng",  # Added so it extracts into its own folder!
         },
         {
             "name": "vswhere",
@@ -552,10 +553,34 @@ TASK_LIST = {
     # Linux Only
     OS.Linux: [
         {
+            "name": "mozjpeg",
+            "url":  "https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.1.zip",
+            "file": "mozjpeg-4.1.1.zip",
+            "func": post_mozjpeg_extract,
+        },
+        {
             "name": "zlib-ng",
             "url":  "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.2.5.zip",
             "file": "zlib-ng-2.2.5.zip",
             "func": post_zlib_extract,
+        },
+        {
+            "name": "libspng",
+            "url":  "https://github.com/randy408/libspng/archive/v0.7.4.zip",
+            "file": "libspng-0.7.4.zip",
+            "func": post_libspng_extract,
+        },
+        {
+            "name": "nativefiledialog",
+            "url":  "https://github.com/btzy/nativefiledialog-extended/archive/refs/tags/v1.2.1.zip",
+            "file": "nativefiledialog-extended-1.2.1.zip",
+            "func": compile_nativefiledialog,
+        },
+        {
+            "name": "libfyaml",
+            "url":  "https://github.com/pantoniou/libfyaml/releases/download/v0.9.5/libfyaml-0.9.5.tar.gz",
+            "file": "libfyaml-0.9.5.tar.gz",
+            "func": compile_libfyaml,
         },
         {
             "name": "FreeImageRe",
@@ -782,7 +807,38 @@ def handle_item(item: dict):
             reset_dir()
 
 
+def check_linux_dependencies():
+    import time
+    missing_packages = []
+    
+    try:
+        subprocess.run(["pkg-config", "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+    except FileNotFoundError:
+        print_color(Color.YELLOW, "Warning: pkg-config not found! Cannot verify if system dependencies are installed.\n")
+        return
+    except subprocess.CalledProcessError:
+        pass
+
+    def check_pkg(pkg_name, desc):
+        result = subprocess.run(["pkg-config", "--exists", pkg_name])
+        if result.returncode != 0:
+            missing_packages.append(desc)
+
+    check_pkg("mpv", "MPV (e.g. libmpv-dev or mpv-devel)")
+    check_pkg("gtk+-3.0", "GTK3 (e.g. libgtk-3-dev or gtk3-devel)")
+
+    if missing_packages:
+        print_color(Color.RED, f"\nWARNING: You are missing required system development libraries!")
+        print_color(Color.RED, f"Please use your distribution's package manager to install the development headers for:")
+        for pkg in missing_packages:
+            print_color(Color.RED, f"  - {pkg}")
+        print_color(Color.RED, "")
+        time.sleep(3)
+
+
 def main():
+    if SYS_OS == OS.Linux:
+        check_linux_dependencies()
     if ARGS.clean:
         print("NOT IMPLEMENTED YET!!!")
         return
@@ -793,9 +849,7 @@ def main():
 
     print("\n---------------------------------------------------------\n")
 
-    for item in TASK_LIST[OS.Any]:
-        handle_item(item)
-        reset_dir()
+
 
     errors_str = "Error" if len(ERROR_LIST) == 1 else "Errors"
     if len(ERROR_LIST) > 0:

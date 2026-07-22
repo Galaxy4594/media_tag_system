@@ -56,7 +56,7 @@ void args_print_help()
 
 	for ( u32 i = 0; i < g_registered_args_count; i++ )
 	{
-		printf( g_registered_args[ i ].cmd_switch );
+		printf( "%s", g_registered_args[ i ].cmd_switch );
 
 		switch ( g_registered_args[ i ].type )
 		{

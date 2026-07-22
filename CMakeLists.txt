@@ -1,12 +1,17 @@
 cmake_minimum_required( VERSION 3.18 FATAL_ERROR )
 
-# use folders for visual studio
+# ========================================================================================================
+# GLOBAL CONFIGURATION
+# ========================================================================================================
+
 set_property( GLOBAL PROPERTY USE_FOLDERS ON )
+set_property( GLOBAL PROPERTY PREFIX "" )
 
 set( CMAKE_CONFIGURATION_TYPES "Debug;Release;RelWithDebInfo" )
-
 set( CMAKE_POSITION_INDEPENDENT_CODE ON )
 set( CMAKE_SHARED_LIBRARY_PREFIX "" )
+set( CMAKE_CXX_STANDARD 23 )
+set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
 option( MIMALLOC "Use mimalloc" OFF )
 
@@ -24,185 +29,11 @@ foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
     set( CMAKE_RUNTIME_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJ_OUT} )
     set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJ_OUT} )
     set( CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${PROJ_OUT} )
-endforeach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
-
-set_property( GLOBAL PROPERTY PREFIX "" )
-set_property( GLOBAL PROPERTY USE_FOLDERS ON )
-
-set( CMAKE_CXX_STANDARD 23 )
-set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
-
-# Compiler/Platform specifc options
-if ( MSVC )
-	# Sets the subsystem to Windows
-	# set( CMAKE_WIN32_EXECUTABLE ON )
-
-	# sets main function to int main() instead of WinMain()
-	# set( CMAKE_EXE_LINKER_FLAGS ${CMAKE_EXE_LINKER_FLAGS} /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup )
-
-	add_compile_definitions(
-		_AMD64_ __x86_64 __amd64
-		NOMINMAX
-		_CRT_SECURE_NO_WARNINGS
-		_ALLOW_RUNTIME_LIBRARY_MISMATCH _ALLOW_ITERATOR_DEBUG_LEVEL_MISMATCH _ALLOW_MSC_VER_MISMATCH
-		_UNICODE=1
-		UNICODE=1
-	)
-	
-	# Use these runtime libraries for both so it doesn't crash smh my head
-	# actually this is useless right now because of core.dll, god dammit
-	# set_property( GLOBAL PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreadedDLL" )
-	
-	# set( CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" )
-	# set_property( GLOBAL PROPERTY MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL" )
-
-	# set( MSVC_VERSION 1939 )
-
-	add_compile_options(
-		# "/Wall"             # Show ALL Warnings
-		"/W4"               # Warning Level 4
-		"/MP"               # multi-threaded compilation
-		"/permissive-"      # make MSVC very compliant
-		"/Zc:__cplusplus"   # set the __cplusplus macro to be the correct version
-		# "/fp:fast"        # fast floating point model
-		"/GF"               # string pooling: allows compiler to create a single copy of identical strings in the program image and in memory during execution
-		
-		# disable stupid warnings
-		"/wd4100"  # 'X' unreferenced formal paramter
-
-	#	"/wd4244"  # conversion from 'X' to 'Y', possible loss of data
-	#	"/wd4267"  # conversion from 'X' to 'Y', possible loss of data (yes there's 2 idk why)
-	#	"/wd4305"  # truncation from 'double' to 'float'
-	#	"/wd4464"  # relative include path contains ".."
-	#	"/wd4668"  # 'X' is not defined as a preprocessor macro, replacing '0' for '#if/#elif' (floods with win32 stuff)
-	#	"/wd4514"  # 'X' unreferenced inline function has been removed
-	#	"/wd4505"  # 'X' unreferenced function with internal linkage has been removed
-	#	"/wd4201"  # nonstandard extension used: nameless struct/union (used in glm)
-	#	"/wd5045"  # Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
-    #
-	#	"/wd4706"  # assignment within conditional expression
-	#	
-	#	# probably temporary
-	#	"/wd4365"  # signed/unsigned mismatch
-	#	"/wd4061"  # enumerator 'X' in switch of enum 'Y' is not explicitly handled by a case label
-	#	
-	#	# padding stuff
-	#	"/wd4324"  # 'X' structure was padded due to alignment specifier
-	#	"/wd4820"  # 'X' bytes padding added after data member 'Y'
-    #
-	#	# Treat these warnings as errors
-    #
-	#	# MSVC doesn't care about this one, but this errors on gcc and can help catch a mistake i made unknowingly
-	#	"/we4002"  # Too many arguments for function-like macro invocation
-	
-		# I accidently get this a lot with printing std::string, so I want this to error so I know i made a mistake
-		"/we4840"  # non-portable use of class 'type' as an argument to a variadic function
-		
-	#	# This is self-explanitory
-	#	"/we4129"  # 'X' unrecognized character escape sequence
-	)
-
-	set( COMPILE_OPTIONS_DEBUG
-		"/Od"        # no optimizations
-		"/ZI"        # edit and continue
-		"/fp:except" # raise floating point exceptions
-		# "/fsanitize=address" # use address sanitizing in Debug (incompatible with /INCREMENTAL and /ZI)
-	)
-	
-	set( COMPILE_OPTIONS_RELEASE
-		"/fp:fast"
-	)
-	
-	add_compile_options(
-		"$<$<CONFIG:Debug>:${COMPILE_OPTIONS_DEBUG}>"
-		"$<$<CONFIG:Release>:${COMPILE_OPTIONS_RELEASE}>"
-		"$<$<CONFIG:RelWithDebInfo>:${COMPILE_OPTIONS_RELEASE}>"
-	)
-	
-	set( LINK_OPTIONS_DEBUG
-		"/INCREMENTAL"
-	)
-	
-	set( LINK_OPTIONS_RELEASE
-		""
-	)
-	
-	add_link_options(
-		"$<$<CONFIG:Debug>:${LINK_OPTIONS_DEBUG}>"
-		"$<$<CONFIG:Release>:${LINK_OPTIONS_RELEASE}>"
-		"$<$<CONFIG:RelWithDebInfo>:${LINK_OPTIONS_RELEASE}>"
-	)
-	
-	add_link_options(
-		"/SUBSYSTEM:WINDOWS"
-		"/ENTRY:mainCRTStartup"
-		# "/INCREMENTAL"
-	)
-
-	link_libraries( Dwmapi )
-	
-	message( "Copying SDL3" )
-	configure_file( "thirdparty/SDL3/lib/x64/SDL3.dll" "${PROJ_OUT}/SDL3.dll" COPYONLY )
-	
-	message( "Copying MPV" )
-	configure_file( "thirdparty/mpv/libmpv-2.dll" "${PROJ_OUT}/libmpv-2.dll" COPYONLY )
-	
-	message( "Copying SPNG" )
-	configure_file( "thirdparty/libspng/build/Release/spng.dll" "${PROJ_OUT}/spng.dll" COPYONLY )
-	
-	message( "Copying FreeImage" )
-	configure_file( "thirdparty/FreeImageRe/bin/FreeImage.dll" "${PROJ_OUT}/FreeImage.dll" COPYONLY )
-	configure_file( "thirdparty/FreeImageRe/bin/heif.dll" "${PROJ_OUT}/heif.dll" COPYONLY )
-	
-	message( "Copying fyaml" )
-	configure_file( "thirdparty/libfyaml/build/Release/fyaml.dll" "${PROJ_OUT}/fyaml.dll" COPYONLY )
-	
-	message( "Copying jxl" )
-	configure_file( "thirdparty/jxl/bin/jxl.dll" "${PROJ_OUT}/jxl.dll" COPYONLY )
-	configure_file( "thirdparty/jxl/bin/jxl_cms.dll" "${PROJ_OUT}/jxl_cms.dll" COPYONLY )
-	configure_file( "thirdparty/jxl/bin/jxl_threads.dll" "${PROJ_OUT}/jxl_threads.dll" COPYONLY )
-	
-	configure_file( "thirdparty/jxl/bin/brotlicommon.dll" "${PROJ_OUT}/brotlicommon.dll" COPYONLY )
-	configure_file( "thirdparty/jxl/bin/brotlidec.dll" "${PROJ_OUT}/brotlidec.dll" COPYONLY )
-	configure_file( "thirdparty/jxl/bin/brotlienc.dll" "${PROJ_OUT}/brotlienc.dll" COPYONLY )
-
-	#message( "Copying mimalloc" )
-	#configure_file( "thirdparty/mimalloc/out/msvc-x64/Release/mimalloc-redirect.dll" "${PROJ_OUT}/mimalloc-redirect.dll" COPYONLY )
-	#configure_file( "thirdparty/mimalloc/out/msvc-x64/Release/mimalloc.dll" "${PROJ_OUT}/mimalloc.dll" COPYONLY )
-	
-else()  # linux
-	link_libraries( GL )
-	
-	add_compile_definitions(
-		_FILE_OFFSET_BITS=64
-		_TIME_BITS=64
-	)
-
-	message( "Copying SPNG" )
-	configure_file( "thirdparty/libspng/build/libspng.so" "${PROJ_OUT}/libspng.so" COPYONLY )
-
-	message( "Copying FreeImage" )
-	configure_file( "thirdparty/FreeImageRe/lib/libFreeImage.so" "${PROJ_OUT}/libFreeImage.so" COPYONLY )
-	configure_file( "thirdparty/FreeImageRe/lib/libheif.so" "${PROJ_OUT}/libheif.so" COPYONLY )
-
-	message( "Copying fyaml" )
-	configure_file( "thirdparty/libfyaml/build/libfyaml.so" "${PROJ_OUT}/libfyaml.so" COPYONLY )
-
-	message( "Copying SDL3" )
-	file( GLOB SDL3_LIBS "thirdparty/SDL3/build/libSDL3.so*" )
-	file( COPY ${SDL3_LIBS} DESTINATION "${PROJ_OUT}" )
-
-	message( "Copying jxl" )
-	configure_file( "thirdparty/libjxl/build/lib/libjxl.so" "${PROJ_OUT}/libjxl.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/libjxl_cms.so" "${PROJ_OUT}/libjxl_cms.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/libjxl_threads.so" "${PROJ_OUT}/libjxl_threads.so" COPYONLY )
-
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/libbrotlicommon.so" "${PROJ_OUT}/libbrotlicommon.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/libbrotlidec.so" "${PROJ_OUT}/libbrotlidec.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/libbrotlienc.so" "${PROJ_OUT}/libbrotlienc.so" COPYONLY )
-endif()
+endforeach()
 
 
+# ========================================================================================================
+# SOURCE FILES
 # ========================================================================================================
 
 set(
@@ -232,7 +63,6 @@ set(
 
     src/codecs/loader_jpeg.cpp
     src/codecs/loader_png.cpp
-    # src/codecs/format_gif.cpp
     src/codecs/loader_freeimage.cpp
     src/codecs/loader_jpegxl.cpp
 
@@ -252,8 +82,20 @@ set(
 	src/glad/khrplatform.h
 )
 
+set( FREETYPE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/freetype" )
+set(
+	FREETYPE_IMGUI_SRC
+	src/imgui/imgui_freetype.cpp
+	src/imgui/imgui_freetype.h
+)
 
-if ( MSVC )
+file(
+	GLOB_RECURSE THIRDPARTY_FILES CONFIGURE_DEPENDS
+	thirdparty/*.h
+	thirdparty/*.hpp
+)
+
+if ( WIN32 )
 	set(
 		SYSTEM_FILES
 		src/system/win32/media_tag_system.manifest
@@ -270,74 +112,44 @@ else()
 	)
 endif()
 
-set( FREETYPE_DIR "thirdparty/freetype" )
 
-set(
-	FREETYPE_IMGUI_SRC
-	src/imgui/imgui_freetype.cpp
-	src/imgui/imgui_freetype.h
-)
-
-include_directories( "${FREETYPE_DIR}/include" )
-add_compile_definitions( IMGUI_ENABLE_FREETYPE=1 )
-
-file(
-	GLOB_RECURSE THIRDPARTY_FILES CONFIGURE_DEPENDS
-	thirdparty/*.h
-	thirdparty/*.hpp
-)
-
-if ( WIN32 )
-	if ( USE_SHARED_LIBS )
-		message( STATUS "Linking against SHARED DLL libraries" )
-		# Point to directories containing the .lib import libraries for the DLLs
-		set( FREETYPE_LIB_DIR "thirdparty/freetype/release dll/x64" )
-	else()
-		message( STATUS "Linking against STATIC libraries" )
-		# Point to your static build folder (e.g., vs2026)
-		set( FREETYPE_LIB_DIR "thirdparty/freetype/release static/vs2026/x64" )
-	endif()
-else()
-	set( FREETYPE_LIB_DIR "thirdparty/freetype/build" )
-endif()
-
-include_directories(
-	"src/"
-	"src/imgui"
-	"src/glad"
-	"thirdparty"
-	"thirdparty/nativefiledialog/src/include"
-	"thirdparty/SDL3/include"
-	"thirdparty/mozjpeg"
-	"thirdparty/libspng/spng"
-	"thirdparty/mpv/include"
-	"thirdparty/gif_load"
-	"thirdparty/FreeImageRe/include"
-	"thirdparty/stb"
-	"thirdparty/libfyaml/include"
-	"${FREETYPE_DIR}/include"
-)
-
-if ( WIN32 )
-	include_directories(
-		"thirdparty/jxl/include"
-	)
-endif()
+# ========================================================================================================
+# GLOBAL INCLUDES & LINKS
+# ========================================================================================================
 
 add_compile_definitions( IMGUI_ENABLE_FREETYPE=1 )
-
-if( LINUX )
-	include_directories(
-		"thirdparty/libjxl/build/lib/include"
-	)
-endif()
 
 if ( MIMALLOC )
 	add_compile_definitions( USE_MIMALLOC=1 )
-	include_directories( "thirdparty/mimalloc/include" )
+	include_directories( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mimalloc/include" )
 else()
 	add_compile_definitions( USE_MIMALLOC=0 )
 endif()
+
+include_directories(
+	"${CMAKE_CURRENT_SOURCE_DIR}/src"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/imgui"
+	"${CMAKE_CURRENT_SOURCE_DIR}/src/glad"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/src/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL3/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mozjpeg"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libspng/spng"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mpv/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/gif_load"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FreeImageRe/include"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/stb"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libfyaml/include"
+	"${FREETYPE_DIR}/include"
+)
+
+link_directories(
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/build/src"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mozjpeg/build"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libspng/build"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FreeImageRe/lib"
+	"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libfyaml/build"
+)
 
 link_libraries(
 	freetype
@@ -348,72 +160,156 @@ link_libraries(
 	jxl
 	jxl_cms
 	jxl_threads
-
-	# must be below jxl, or my program will link the jxl functions to freeimage instead
 	FreeImage
 )
 
-if ( MIMALLOC )
-	link_libraries( mimalloc )
-	link_directories( "thirdparty/mimalloc/out/msvc-x64/Release" )
-endif()
+foreach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
+	link_directories(
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/nativefiledialog/build/src/${OUTPUT_CONFIG}"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mozjpeg/build/${OUTPUT_CONFIG}"
+	)
+endforeach()
 
-link_directories(
-	"thirdparty/nativefiledialog/build/src"
-	"thirdparty/mozjpeg/build"
-	"thirdparty/libspng/build"
-	"thirdparty/FreeImageRe/lib"
-	"thirdparty/libfyaml/build"
-	"${FREETYPE_LIB_DIR}"
-)
+
+# ========================================================================================================
+# PLATFORM SPECIFIC (WINDOWS)
+# ========================================================================================================
 
 if ( WIN32 )
-	link_directories(
-		"thirdparty/libspng/build/Release"
-		"thirdparty/libfyaml/build/Release"
-		"thirdparty/jxl/lib"
-		"thirdparty/SDL3/lib/x64"
+	add_compile_definitions(
+		_AMD64_ __x86_64 __amd64
+		NOMINMAX
+		_CRT_SECURE_NO_WARNINGS
+		_ALLOW_RUNTIME_LIBRARY_MISMATCH _ALLOW_ITERATOR_DEBUG_LEVEL_MISMATCH _ALLOW_MSC_VER_MISMATCH
+		_UNICODE=1
+		UNICODE=1
 	)
+
+	add_compile_options(
+		"/W4"               
+		"/MP"               
+		"/permissive-"      
+		"/Zc:__cplusplus"   
+		"/GF"               
+		"/wd4100"           
+		"/we4840"           
+	)
+
+	set( COMPILE_OPTIONS_DEBUG "/Od" "/ZI" "/fp:except" )
+	set( COMPILE_OPTIONS_RELEASE "/fp:fast" )
+	
+	add_compile_options(
+		"$<$<CONFIG:Debug>:${COMPILE_OPTIONS_DEBUG}>"
+		"$<$<CONFIG:Release>:${COMPILE_OPTIONS_RELEASE}>"
+		"$<$<CONFIG:RelWithDebInfo>:${COMPILE_OPTIONS_RELEASE}>"
+	)
+	
+	set( LINK_OPTIONS_DEBUG "/INCREMENTAL" )
+	set( LINK_OPTIONS_RELEASE "" )
+	
+	add_link_options(
+		"$<$<CONFIG:Debug>:${LINK_OPTIONS_DEBUG}>"
+		"$<$<CONFIG:Release>:${LINK_OPTIONS_RELEASE}>"
+		"$<$<CONFIG:RelWithDebInfo>:${LINK_OPTIONS_RELEASE}>"
+		"/SUBSYSTEM:WINDOWS"
+		"/ENTRY:mainCRTStartup"
+	)
+
+	include_directories(
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/include"
+	)
+
+	if ( USE_SHARED_LIBS )
+		set( FREETYPE_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/freetype/release dll/x64" )
+	else()
+		set( FREETYPE_LIB_DIR "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/freetype/release static/vs2026/x64" )
+	endif()
+
+	link_directories(
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libspng/build/Release"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libfyaml/build/Release"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/lib"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL3/lib/x64"
+		"${FREETYPE_LIB_DIR}"
+	)
+
 	link_libraries(
+		Dwmapi
 		turbojpeg-static
 	)
+
+	# Consolidate Windows DLL copying
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL3/lib/x64/SDL3.dll" "${PROJ_OUT}/SDL3.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/mpv/libmpv-2.dll" "${PROJ_OUT}/libmpv-2.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libspng/build/Release/spng.dll" "${PROJ_OUT}/spng.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FreeImageRe/bin/FreeImage.dll" "${PROJ_OUT}/FreeImage.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FreeImageRe/bin/heif.dll" "${PROJ_OUT}/heif.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libfyaml/build/Release/fyaml.dll" "${PROJ_OUT}/fyaml.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/bin/jxl.dll" "${PROJ_OUT}/jxl.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/bin/jxl_cms.dll" "${PROJ_OUT}/jxl_cms.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/bin/jxl_threads.dll" "${PROJ_OUT}/jxl_threads.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/bin/brotlicommon.dll" "${PROJ_OUT}/brotlicommon.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/bin/brotlidec.dll" "${PROJ_OUT}/brotlidec.dll" COPYONLY )
+	configure_file( "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/jxl/bin/brotlienc.dll" "${PROJ_OUT}/brotlienc.dll" COPYONLY )
+
+
+# ========================================================================================================
+# PLATFORM SPECIFIC (LINUX)
+# ========================================================================================================
+
 elseif( LINUX )
-	link_directories(
-		"thirdparty/SDL3/build"
-		"thirdparty/libjxl/build/lib"
-		"thirdparty/libjxl/build/third_party/brotli"
+	add_compile_definitions(
+		_FILE_OFFSET_BITS=64
+		_TIME_BITS=64
 	)
+
+	include_directories(
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/lib/include"
+	)
+
+	link_directories(
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL3/build"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL3/build/lib"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/lib"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/third_party/brotli"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/freetype/build"
+	)
+
 	link_libraries(
+		GL
 		turbojpeg
 		stdc++exp
 	)
+
+	# Consolidate Linux SO copying using GLOB to handle versions and symlinks gracefully
+	file( GLOB LINUX_SO_FILES 
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libspng/build/libspng.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libspng/build/spng.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FreeImageRe/lib/libFreeImage.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/FreeImageRe/lib/libheif.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libfyaml/build/libfyaml.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL3/build/libSDL3.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/SDL3/build/lib/libSDL3.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/lib/libjxl.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/lib/libjxl_cms.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/lib/libjxl_threads.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/third_party/brotli/libbrotlicommon.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/third_party/brotli/libbrotlidec.so*"
+		"${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/libjxl/build/third_party/brotli/libbrotlienc.so*"
+	)
+	file( COPY ${LINUX_SO_FILES} DESTINATION "${PROJ_OUT}" )
 endif()
 
-foreach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
-	link_directories(
-		"thirdparty/nativefiledialog/build/src/${OUTPUT_CONFIG}"
-		"thirdparty/mozjpeg/build/${OUTPUT_CONFIG}"
-		# "thirdparty/libfyaml/build/${OUTPUT_CONFIG}"
-		# "thirdparty/libspng/build/${OUTPUT_CONFIG}"
-	)
-endforeach( OUTPUT_CONFIG ${CMAKE_CONFIGURATION_TYPES} )
+# ========================================================================================================
+# EXECUTABLES
+# ========================================================================================================
 
 add_executable( media_tag_system ${SRC_FILES} ${SYSTEM_FILES} ${FREETYPE_IMGUI_SRC} ${THIRDPARTY_FILES} )
 
 if ( WIN32 )
 	add_executable( media_tag_system_con ${SRC_FILES} ${SYSTEM_FILES} ${FREETYPE_IMGUI_SRC} ${THIRDPARTY_FILES} )
-
-	target_link_options(
-		media_tag_system_con PRIVATE
-		"/SUBSYSTEM:CONSOLE"
-	)
-
-	set_target_properties(
-		media_tag_system_con PROPERTIES
-		SUFFIX ".com"
-		RUNTIME_OUTPUT_NAME "media_tag_system"
-		PDB_NAME "media_tag_system_con"
-	)
+	target_link_options( media_tag_system_con PRIVATE "/SUBSYSTEM:CONSOLE" )
+	set_target_properties( media_tag_system_con PROPERTIES SUFFIX ".com" RUNTIME_OUTPUT_NAME "media_tag_system" PDB_NAME "media_tag_system_con" )
 endif()
 
 source_group(
@@ -427,4 +323,3 @@ source_group(
 	PREFIX "Thirdparty Files"
 	FILES ${THIRDPARTY_FILES}
 )
-

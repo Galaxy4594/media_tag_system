@@ -117,7 +117,7 @@ bool config_mkdir( std::string_view path, const char* fail_str )
 	if ( fs_make_dir_check( path.data() ) )
 		return true;
 
-	printf( fail_str );
+	printf( "%s", fail_str );
 	return false;
 }
 

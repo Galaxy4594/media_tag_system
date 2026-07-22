@@ -478,7 +478,7 @@ bool thumbnail_loader_load_source_from_disk( thumbnail_t* thumbnail, mpv_handle*
 		// mpv_handle_wait_event( local_mpv, 0.1, mpv_thread_name );
 
 		const char* cmd[]   = { "loadfile", thumbnail->path, NULL };
-		int         cmd_ret = p_mpv_command_async( local_mpv, NULL, cmd );
+		int         cmd_ret = p_mpv_command_async( local_mpv, 0, cmd );
 
 		mpv_event*  event   = p_mpv_wait_event( local_mpv, -1 );
 
@@ -514,7 +514,7 @@ bool thumbnail_loader_load_source_from_disk( thumbnail_t* thumbnail, mpv_handle*
 
 		// TODO: USE screenshot-raw
 		const char* cmd3[] = { "screenshot-to-file", video_thumbnail_path, NULL };
-		cmd_ret            = p_mpv_command_async( local_mpv, NULL, cmd3 );
+		cmd_ret            = p_mpv_command_async( local_mpv, 0, cmd3 );
 
 		event              = p_mpv_wait_event( local_mpv, -1 );
 
@@ -988,6 +988,6 @@ void thumbnail_cache_debug_draw()
 	ImGui::Text( "Save Thread Count: %u", app::config.thumbnail_save_threads );
 
 	ImGui::Text( "Drawn Image Count: %u", gallery::drawn_image_count );
-	ImGui::Text( "Thumbnail Save Queue Size: %u", g_thumbnail_save.count );
+	ImGui::Text( "Thumbnail Save Queue Size: %zu", g_thumbnail_save.count );
 }
 

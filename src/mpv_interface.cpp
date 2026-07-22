@@ -210,7 +210,7 @@ void mpv_update_frame()
 
 	u64 start_time = sys_get_time_ms();
 
-	mpv_opengl_fbo fbo{ g_mpv_fbo, g_mpv_framebuffer_size[ 0 ], g_mpv_framebuffer_size[ 1 ], GL_RGB };
+	mpv_opengl_fbo fbo{ (int)g_mpv_fbo, g_mpv_framebuffer_size[ 0 ], g_mpv_framebuffer_size[ 1 ], GL_RGB };
 	int            yes  = 1;
 
 	mpv_render_param rp[] = {
@@ -807,7 +807,7 @@ void mpv_cmd_loadfile( const char* file )
 	printf( "loading file: %s\n", file );
 
 	const char* cmd[]   = { "loadfile", file, NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, NULL, cmd );
+	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 
 	g_mpv_video_ready   = false;
 
@@ -865,7 +865,7 @@ void mpv_cmd_close_video()
 		return;
 
 	const char* cmd[]   = { "stop", NULL };
-	int         cmd_ret = p_mpv_command_async( g_mpv, NULL, cmd );
+	int         cmd_ret = p_mpv_command_async( g_mpv, 0, cmd );
 
 	ch_free_str( g_current_video );
 	g_current_video   = nullptr;

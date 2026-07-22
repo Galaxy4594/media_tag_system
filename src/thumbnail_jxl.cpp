@@ -46,7 +46,7 @@ bool thumbnail_save( image_t& image, const std::string& output )
 	// 	return false;
 	// }
 
-	JxlPixelFormat pixel_format = { image.channels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
+	JxlPixelFormat pixel_format = { (uint32_t)image.channels, JXL_TYPE_UINT8, JXL_NATIVE_ENDIAN, 0 };
 
 	JxlBasicInfo   basic_info;
 	JxlEncoderInitBasicInfo( &basic_info );
