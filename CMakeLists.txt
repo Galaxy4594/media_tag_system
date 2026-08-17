@@ -12,6 +12,147 @@ option( MIMALLOC "Use mimalloc" OFF )
 
 project( media_tag_system )
 
+include(FetchContent)
+
+set(WITH_GTEST OFF CACHE BOOL "" FORCE)
+set(ZLIB_COMPAT ON CACHE BOOL "" FORCE)
+
+# --- zlib-ng Conditional Loading ---
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(ZLIBNG QUIET zlib-ng)
+endif()
+if(NOT ZLIBNG_FOUND)
+    find_package(ZLIB QUIET)
+endif()
+
+if(ZLIBNG_FOUND OR ZLIB_FOUND)
+    message(STATUS "Found zlib/zlib-ng on system")
+    # ZLIB_LIBRARIES is already set by find_package
+elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/zlib-ng/include/zlib.h")
+    message(STATUS "Found zlib-ng in thirdparty folder")
+    set(ZLIB_ROOT "${CMAKE_CURRENT_LIST_DIR}/thirdparty/zlib-ng")
+    find_package(ZLIB REQUIRED)
+else()
+    message(STATUS "zlib/zlib-ng not found on system or thirdparty, using FetchContent")
+    FetchContent_Declare(
+        zlib-ng
+        GIT_REPOSITORY https://github.com/zlib-ng/zlib-ng.git
+        GIT_TAG 2.3.3
+    )
+    FetchContent_MakeAvailable(zlib-ng)
+    set(ZLIB_LIBRARIES zlib)
+endif()
+
+set(WITH_TOOLS OFF CACHE BOOL "" FORCE)
+set(WITH_TESTS OFF CACHE BOOL "" FORCE)
+set(WITH_SYSTEM_SPNG ON CACHE BOOL "" FORCE)
+set(WITH_SYSTEM_ZLIB ON CACHE BOOL "" FORCE)
+set(PNG_SUPPORTED OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    libjpeg-turbo
+    GIT_REPOSITORY https://github.com/libjpeg-turbo/libjpeg-turbo.git
+    GIT_TAG 3.2.0
+)
+
+set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(SPNG_SHARED ON CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    libspng
+    GIT_REPOSITORY https://github.com/randy408/libspng.git
+    GIT_TAG v0.7.4
+)
+
+FetchContent_Declare(
+    freetype
+    URL https://nongnu.askapache.com/freetype/freetype-2.14.1.tar.xz
+)
+
+FetchContent_Declare(
+    nativefiledialog
+    GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
+    GIT_TAG v1.2.1
+)
+
+set(ENABLE_NETWORK OFF CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+FetchContent_Declare(
+    libfyaml
+    GIT_REPOSITORY https://github.com/pantoniou/libfyaml.git
+    GIT_TAG v1.0.0-alpha8
+)
+
+FetchContent_MakeAvailable(libspng freetype nativefiledialog libfyaml)
+
+# --- libjxl Conditional Loading ---
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(JXL QUIET libjxl)
+endif()
+
+if(JXL_FOUND)
+    message(STATUS "Found libjxl via pkg-config")
+    include_directories(${JXL_INCLUDE_DIRS})
+    link_directories(${JXL_LIBRARY_DIRS})
+    set(JXL_LIBS ${JXL_LIBRARIES})
+elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/libjxl/x64-windows/include")
+    message(STATUS "Found libjxl in thirdparty folder")
+    include_directories("${CMAKE_CURRENT_LIST_DIR}/thirdparty/libjxl/x64-windows/include")
+    if ( WIN32 )
+        link_directories("${CMAKE_CURRENT_LIST_DIR}/thirdparty/libjxl/x64-windows/lib")
+    endif()
+    set(JXL_LIBS jxl jxl_cms jxl_threads hwy brotlidec brotlienc brotlicommon)
+else()
+    message(STATUS "libjxl not found on system or thirdparty, using FetchContent")
+    set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_FUZZERS OFF CACHE BOOL "" FORCE)
+    set(CXX_FUZZERS_SUPPORTED OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_DOXYGEN OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_MANPAGES OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_JNI OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_OPENEXR OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_SJPEG OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_BENCHMARK OFF CACHE BOOL "" FORCE)
+    set(JPEGXL_ENABLE_TOOLS OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+        libjxl
+        GIT_REPOSITORY https://github.com/libjxl/libjxl.git
+        GIT_TAG v0.12.x
+        GIT_SHALLOW ON
+    )
+    FetchContent_MakeAvailable(libjxl)
+    set(JXL_LIBS jxl jxl_cms jxl_threads)
+    
+    # libjxl sets CMAKE_INSTALL_MANDIR to "" when manpages are disabled, which breaks libjpeg-turbo later
+    set(CMAKE_INSTALL_MANDIR "share/man" CACHE PATH "" FORCE)
+endif()
+
+FetchContent_GetProperties(libjpeg-turbo)
+if(NOT libjpeg-turbo_POPULATED)
+    FetchContent_Populate(libjpeg-turbo)
+    file(READ "${libjpeg-turbo_SOURCE_DIR}/CMakeLists.txt" JPEG_CMAKE)
+    string(REPLACE "if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)" "if(FALSE)" JPEG_CMAKE "${JPEG_CMAKE}")
+    string(REPLACE "add_custom_target(uninstall" "add_custom_target(uninstall_jpeg" JPEG_CMAKE "${JPEG_CMAKE}")
+    string(REPLACE "pkg_check_modules(spng REQUIRED spng IMPORTED_TARGET)" "add_library(PkgConfig::spng ALIAS spng)" JPEG_CMAKE "${JPEG_CMAKE}")
+    string(REPLACE "find_package(ZLIB REQUIRED)" "set(ZLIB_FOUND 1)\nset(ZLIB_LIBRARIES ${ZLIB_LIBRARIES})" JPEG_CMAKE "${JPEG_CMAKE}")
+    file(WRITE "${libjpeg-turbo_SOURCE_DIR}/CMakeLists.txt" "${JPEG_CMAKE}")
+    
+    # Globally replace CMAKE_SOURCE_DIR and CMAKE_BINARY_DIR across all libjpeg-turbo CMakeLists.txt files
+    # to prevent them from looking in our project root instead of their own.
+    file(GLOB_RECURSE JPEG_CMAKELISTS "${libjpeg-turbo_SOURCE_DIR}/CMakeLists.txt")
+    foreach(F IN LISTS JPEG_CMAKELISTS)
+        file(READ "${F}" CONTENT)
+        string(REPLACE "CMAKE_SOURCE_DIR" "PROJECT_SOURCE_DIR" CONTENT "${CONTENT}")
+        string(REPLACE "CMAKE_BINARY_DIR" "PROJECT_BINARY_DIR" CONTENT "${CONTENT}")
+        file(WRITE "${F}" "${CONTENT}")
+    endforeach()
+    set(CMAKE_INSTALL_DOCDIR "doc" CACHE PATH "" FORCE)
+    add_subdirectory(${libjpeg-turbo_SOURCE_DIR} ${libjpeg-turbo_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
+
+
+
 set( PROJ_OBJ "obj" )
 set( PROJ_OUT "${CMAKE_CURRENT_LIST_DIR}/out" )
 set( THIRDPARTY_DIR "${CMAKE_CURRENT_LIST_DIR}/thirdparty" )
@@ -154,32 +295,21 @@ if ( MSVC )
 	message( "Copying MPV" )
 	configure_file( "thirdparty/mpv/libmpv-2.dll" "${PROJ_OUT}/libmpv-2.dll" COPYONLY )
 	
-	message( "Copying SPNG" )
-	configure_file( "thirdparty/libspng/build/Release/spng.dll" "${PROJ_OUT}/spng.dll" COPYONLY )
-	
-	message( "Copying turbojpeg" )
-	configure_file( "thirdparty/libjpeg-turbo/build/Release/turbojpeg.dll" "${PROJ_OUT}/turbojpeg.dll" COPYONLY )
-	
 	message( "Copying FreeImage" )
 	configure_file( "thirdparty/FreeImageRe/bin/FreeImage.dll" "${PROJ_OUT}/FreeImage.dll" COPYONLY )
 	configure_file( "thirdparty/FreeImageRe/bin/heif.dll" "${PROJ_OUT}/heif.dll" COPYONLY )
 	
-	message( "Copying fyaml" )
-	configure_file( "thirdparty/libfyaml/build/Release/fyaml.dll" "${PROJ_OUT}/fyaml.dll" COPYONLY )
-	
-	message( "Copying jxl" )
-	configure_file( "thirdparty/libjxl/build/lib/Release/jxl.dll" "${PROJ_OUT}/jxl.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/Release/jxl_cms.dll" "${PROJ_OUT}/jxl_cms.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/Release/jxl_threads.dll" "${PROJ_OUT}/jxl_threads.dll" COPYONLY )
-	
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/Release/brotlicommon.dll" "${PROJ_OUT}/brotlicommon.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/Release/brotlidec.dll" "${PROJ_OUT}/brotlidec.dll" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/Release/brotlienc.dll" "${PROJ_OUT}/brotlienc.dll" COPYONLY )
+	message( "Copying libjxl" )
+	configure_file( "thirdparty/libjxl/x64-windows/bin/jxl.dll" "${PROJ_OUT}/jxl.dll" COPYONLY )
+	configure_file( "thirdparty/libjxl/x64-windows/bin/jxl_cms.dll" "${PROJ_OUT}/jxl_cms.dll" COPYONLY )
+	configure_file( "thirdparty/libjxl/x64-windows/bin/jxl_threads.dll" "${PROJ_OUT}/jxl_threads.dll" COPYONLY )
+	configure_file( "thirdparty/libjxl/x64-windows/bin/brotlicommon.dll" "${PROJ_OUT}/brotlicommon.dll" COPYONLY )
+	configure_file( "thirdparty/libjxl/x64-windows/bin/brotlidec.dll" "${PROJ_OUT}/brotlidec.dll" COPYONLY )
+	configure_file( "thirdparty/libjxl/x64-windows/bin/brotlienc.dll" "${PROJ_OUT}/brotlienc.dll" COPYONLY )
 
-	#message( "Copying mimalloc" )
-	#configure_file( "thirdparty/mimalloc/out/msvc-x64/Release/mimalloc-redirect.dll" "${PROJ_OUT}/mimalloc-redirect.dll" COPYONLY )
-	#configure_file( "thirdparty/mimalloc/out/msvc-x64/Release/mimalloc.dll" "${PROJ_OUT}/mimalloc.dll" COPYONLY )
-	
+	message( "Copying ZLIB" )
+	configure_file( "thirdparty/zlib-ng/bin/zlib1.dll" "${PROJ_OUT}/zlib1.dll" COPYONLY )
+
 else()  # linux
 	link_libraries( GL )
 	
@@ -187,25 +317,12 @@ else()  # linux
 		_FILE_OFFSET_BITS=64
 		_TIME_BITS=64
 	)
-
-	message( "Copying SPNG" )
-	configure_file( "thirdparty/libspng/build/libspng.so" "${PROJ_OUT}/libspng.so" COPYONLY )
-
-	message( "Copying FreeImage" )
-	configure_file( "thirdparty/FreeImageRe/lib/libFreeImage.so" "${PROJ_OUT}/libFreeImage.so" COPYONLY )
-	configure_file( "thirdparty/FreeImageRe/lib/libheif.so" "${PROJ_OUT}/libheif.so" COPYONLY )
-
-	message( "Copying fyaml" )
-	configure_file( "thirdparty/libfyaml/build/libfyaml.so" "${PROJ_OUT}/libfyaml.so" COPYONLY )
-
-	message( "Copying jxl" )
-	configure_file( "thirdparty/libjxl/build/lib/libjxl.so" "${PROJ_OUT}/libjxl.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/libjxl_cms.so" "${PROJ_OUT}/libjxl_cms.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/lib/libjxl_threads.so" "${PROJ_OUT}/libjxl_threads.so" COPYONLY )
-
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/libbrotlicommon.so" "${PROJ_OUT}/libbrotlicommon.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/libbrotlidec.so" "${PROJ_OUT}/libbrotlidec.so" COPYONLY )
-	configure_file( "thirdparty/libjxl/build/third_party/brotli/libbrotlienc.so" "${PROJ_OUT}/libbrotlienc.so" COPYONLY )
+	
+	if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/FreeImageRe/lib/libFreeImage.so")
+		message( "Copying FreeImage" )
+		configure_file( "thirdparty/FreeImageRe/lib/libFreeImage.so" "${PROJ_OUT}/libFreeImage.so" COPYONLY )
+		configure_file( "thirdparty/FreeImageRe/lib/libheif.so" "${PROJ_OUT}/libheif.so" COPYONLY )
+	endif()
 endif()
 
 
@@ -308,24 +425,49 @@ include_directories(
 	"src/imgui"
 	"src/glad"
 	"thirdparty"
-	"thirdparty/nativefiledialog/src/include"
 	"thirdparty/SDL3/include"
-	"thirdparty/libjpeg-turbo/build"
-	"thirdparty/libjpeg-turbo/src"
-	"thirdparty/libspng/spng"
 	"thirdparty/mpv/include"
 	"thirdparty/gif_load"
 	"thirdparty/FreeImageRe/include"
 	"thirdparty/stb"
-	"thirdparty/libfyaml/include"
-	"thirdparty/libjxl/lib/include"
-	"thirdparty/libjxl/build/lib/include"
+	${libjpeg-turbo_SOURCE_DIR}
+	${libjpeg-turbo_SOURCE_DIR}/src
+	${libjpeg-turbo_BINARY_DIR}
+	
+	${nativefiledialog_SOURCE_DIR}/src/include
+	${libspng_SOURCE_DIR}/spng
+	${libfyaml_SOURCE_DIR}/include
 )
 
+set(SDL3_LINK_TARGET "SDL3")
+
 if( LINUX )
-	include_directories(
-		"/usr/include/SDL3"
-	)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(SDL3_PKG QUIET sdl3)
+        if(SDL3_PKG_FOUND)
+            include_directories(${SDL3_PKG_INCLUDE_DIRS})
+            link_directories(${SDL3_PKG_LIBRARY_DIRS})
+            message(STATUS "Found SDL3 via pkg-config")
+        endif()
+    endif()
+    
+    if(NOT SDL3_PKG_FOUND AND NOT EXISTS "${CMAKE_CURRENT_LIST_DIR}/thirdparty/SDL3/include")
+        message(STATUS "SDL3 not found on system or thirdparty, using FetchContent")
+        FetchContent_Declare(
+            SDL3
+            GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+            GIT_TAG release-3.2.4
+            GIT_SHALLOW ON
+        )
+        set(SDL_SHARED ON CACHE BOOL "" FORCE)
+        set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+        set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+        set(SDL_TESTS OFF CACHE BOOL "" FORCE)
+        FetchContent_MakeAvailable(SDL3)
+        include_directories("${sdl3_SOURCE_DIR}/include")
+        set(SDL3_LINK_TARGET "SDL3-shared")
+    endif()
 endif()
 
 if ( MIMALLOC )
@@ -338,12 +480,10 @@ endif()
 link_libraries(
 	freetype
 	nfd
-	SDL3
+	${SDL3_LINK_TARGET}
 	spng
 	fyaml
-	jxl
-	jxl_cms
-	jxl_threads
+	${JXL_LIBS}
 
 	# must be below jxl, or my program will link the jxl functions to freeimage instead
 	FreeImage
@@ -370,27 +510,20 @@ set( LINK_DIR_RELEASE_DEBUG_INFO
 )
 
 link_directories(
-	"thirdparty/nativefiledialog/build/src"
-	"thirdparty/mozjpeg/build"
-	"thirdparty/libspng/build"
-	"thirdparty/FreeImageRe/lib"
-	"thirdparty/libfyaml/build"
 	
 	# i don't want to use static, but for some reason, it can't find the lib when using the dll version?
-	"${FREETYPE_DIR}/objs/x64/Release Static"
 	
 	"$<$<CONFIG:Debug>:${LINK_DIR_DEBUG}>"
 	"$<$<CONFIG:Release>:${LINK_DIR_RELEASE}>"
 	"$<$<CONFIG:RelWithDebInfo>:${LINK_DIR_RELEASE_DEBUG_INFO}>"
+	
+	"thirdparty/FreeImageRe/lib"
 	
 	# "thirdparty/nativefiledialog/build/src/${CMAKE_CFG_INTDIR}"
 )
 
 if ( WIN32 )
 	link_directories(
-		"thirdparty/libspng/build/Release"
-		"thirdparty/libfyaml/build/Release"
-		"thirdparty/libjxl/build/lib/Release"
 		"thirdparty/SDL3/lib/x64"
 	)
 	link_libraries(
@@ -431,6 +564,33 @@ if ( WIN32 )
 		RUNTIME_OUTPUT_NAME "media_tag_system"
 		PDB_NAME "media_tag_system_con"
 	)
+endif()
+
+# Automatically copy DLLs/SOs to the output directory after compilation
+add_custom_command(TARGET media_tag_system POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:spng> "${PROJ_OUT}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:turbojpeg> "${PROJ_OUT}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:fyaml> "${PROJ_OUT}"
+    COMMENT "Copying FetchContent shared libraries to output directory"
+)
+
+if(TARGET SDL3-shared)
+    add_custom_command(TARGET media_tag_system POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3-shared> "${PROJ_OUT}"
+    )
+endif()
+
+if ( WIN32 )
+    add_custom_command(TARGET media_tag_system_con POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:spng> "${PROJ_OUT}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:turbojpeg> "${PROJ_OUT}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:fyaml> "${PROJ_OUT}"
+    )
+    if(TARGET SDL3-shared)
+        add_custom_command(TARGET media_tag_system_con POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:SDL3-shared> "${PROJ_OUT}"
+        )
+    endif()
 endif()
 
 source_group(

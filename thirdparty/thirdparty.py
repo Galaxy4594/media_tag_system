@@ -20,11 +20,7 @@ from typing import List, Dict, BinaryIO
 #  but very messy as it's one file
 # -------------------------------------------------------------------------
 
-try:
-    import py7zr
-except ImportError:
-    print("Error importing py7zr: install with pip and run this again")
-    quit(2)
+
 
 
 # Win32 Console Color Printing
@@ -265,221 +261,7 @@ def parse_args() -> argparse.Namespace:
 # =================================================================================================
 
 
-def post_jpeg_extract():
-    if ARGS.no_build:
-        return
-        
-    set_project("libjpeg-turbo")
 
-    os.chdir("libjpeg-turbo")
-
-    build_options = "-DWITH_TOOLS=OFF -DWITH_TESTS=OFF -DWITH_SYSTEM_SPNG=OFF -DWITH_SYSTEM_ZLIB=OFF -DPNG_SUPPORTED=OFF"
-
-    if not syscmd(f"cmake -B build {build_options} .", "Failed to run cmake"):
-        return
-
-    print("Building libjpeg-turbo - Release\n")
-    if not syscmd(f"cmake --build ./build --config Release --parallel", "Failed to build in Release"):
-        return
-
-    print("Building libjpeg-turbo - Debug\n")
-    if not syscmd(f"cmake --build ./build --config Debug --parallel", "Failed to build in Debug"):
-        return
-
-
-# =================================================================================================
-
-
-def post_zlib_extract():
-    if ARGS.no_build:
-        return
-
-    set_project("zlib-ng")
-
-    os.chdir("zlib-ng")
-
-    build_options = "-DWITH_GTEST=OFF -DZLIB_COMPAT=ON"
-
-    if not syscmd(f"cmake -B build {build_options} .", "Failed to run cmake"):
-        return
-
-    print("Building zlib-ng - Release\n")
-    if not syscmd(f"cmake --build ./build --config Release --parallel", "Failed to build in Release"):
-        return
-
-    print("Building zlib-ng - Debug\n")
-    if not syscmd(f"cmake --build ./build --config Debug --parallel", "Failed to build in Debug"):
-        return
-
-
-# =================================================================================================
-
-
-def post_libspng_extract():
-    if ARGS.no_build:
-        return
-
-    set_project("libspng")
-
-    os.chdir("libspng")
-
-    print(os.getcwd())
-
-    zlib_path = os.getcwd() + "/../zlib-ng/build"
-    zlib_build = os.getcwd()+ "/../zlib-ng/build"
-
-    if SYS_OS == OS.Windows:
-        zlib_build += "/Release/zlibstatic.lib"
-    elif SYS_OS == OS.Linux:
-        zlib_build += "/libz.so"
-
-    build_options = f"-DBUILD_EXAMPLES=OFF -DSPNG_SHARED=ON -DZLIB_LIBRARY={zlib_build} -DZLIB_INCLUDE_DIR={zlib_path}"
-
-    if not syscmd(f"cmake -B build {build_options} .", "Failed to run cmake"):
-        return
-
-    print("Building libspng - Release\n")
-    if not syscmd(f"cmake --build ./build --config Release --parallel", "Failed to build in Release"):
-        return
-
-    #print("Building libspng - Debug\n")
-    #if not syscmd(f"cmake --build ./build --config Debug", "Failed to build in Debug"):
-    #    return
-    
-
-# =================================================================================================
-
-
-def post_freetype_extract():
-    set_project("Freetype")
-    os.chdir("freetype")
-
-    if SYS_OS == OS.Windows:
-        for cfg in {"Debug Static", "Release Static"}:
-            # cmd = f"\"{VS_MSBUILD}\" \"{fix_proj}\" -property:Configuration={cfg} -property:Platform=x64"
-            cmd = [VS_MSBUILD, "builds\\windows\\vc2010\\freetype.vcxproj", f"-property:Configuration={cfg}", "-property:Platform=x64"]
-            subprocess.call(cmd)
-
-    else:
-        print(" ------------------------ TODO: BUILD FREETYPE ON LINUX !!! ------------------------ ")
-
-    pass
-
-
-# =================================================================================================
-
-
-def compile_nativefiledialog():
-    set_project("Native File Dialog")
-    os.chdir("nativefiledialog")
-
-    if not syscmd(f"cmake -B build .", "Failed to run cmake"):
-        return
-
-    print("Building nativefiledialog - RelWithDebInfo\n")
-    if not syscmd(f"cmake --build ./build --config RelWithDebInfo --parallel", "Failed to build in RelWithDebInfo"):
-        return
-
-    print("Building nativefiledialog - Release\n")
-    if not syscmd(f"cmake --build ./build --config Release --parallel", "Failed to build in Release"):
-        return
-
-    print("Building nativefiledialog - Debug\n")
-    if not syscmd(f"cmake --build ./build --config Debug --parallel", "Failed to build in Debug"):
-        return
-
-
-# =================================================================================================
-
-
-def compile_libfyaml():
-    set_project("libfyaml")
-    os.chdir("libfyaml")
-
-    if not syscmd(f"cmake -B build -DENABLE_NETWORK=OFF -DBUILD_TESTING=OFF .", "Failed to run cmake"):
-        return
-
-    print("Building libfyaml - RelWithDebInfo\n")
-    if not syscmd(f"cmake --build ./build --config RelWithDebInfo --parallel", "Failed to build in RelWithDebInfo"):
-        return
-
-    print("Building libfyaml - Release\n")
-    if not syscmd(f"cmake --build ./build --config Release --parallel", "Failed to build in Release"):
-        return
-
-    print("Building libfyaml - Debug\n")
-    if not syscmd(f"cmake --build ./build --config Debug --parallel", "Failed to build in Debug"):
-        return
-
-
-# =================================================================================================
-
-
-def libjxl_run():
-    set_project("jxl")
-
-    # Stable version of libjxl to use
-    branch = "v0.12.x"
-
-    # TODO: implement a global basic version check system for tasks
-    # check version
-    redownload = False
-    if os.path.isdir("libjxl"):
-        if os.path.isfile("libjxl/IMAGE_VIEW_VERSION"):
-            version = ""
-            with open("libjxl/IMAGE_VIEW_VERSION", "r") as version_io:
-                version = version_io.read()
-
-            if version != branch:
-                print_color(Color.YELLOW, "JXL: Version mismatch: got version {version}, expected {branch}")
-                redownload = True
-        else:
-            print_color(Color.YELLOW, "JXL: Version file not found, redownloading!")
-            redownload = True
-
-    if redownload:
-        shutil.rmtree("libjxl")
-
-    # NOTE: this probably could just be a submodule in this repo, but i want less submodules downloaded so it's a bit faster, and takes less space'
-    if not os.path.isdir("libjxl"):
-        # NOTE: should we only clone some submodules?
-        # if not syscmd(f"git clone --branch {branch} https://github.com/libjxl/libjxl.git --recursive --shallow-submodules", "Failed to clone libjxl with git"):
-        if not syscmd(f"git clone --branch {branch} --single-branch --depth 1 https://github.com/libjxl/libjxl.git", "Failed to clone libjxl with git"):
-            return
-
-        # init some submodules
-        if not syscmd(f"git -C libjxl/third_party submodule update --depth 1 --init highway brotli skcms libpng zlib", "Failed to init libjxl submodules"):
-            return
-
-        with open("libjxl/IMAGE_VIEW_VERSION", "w") as version_io:
-            version_io.write(branch)
-
-        # add spacing
-        print()
-
-    os.chdir("libjxl")
-
-    defines = "-DBUILD_SHARED_LIBS=ON -DJPEGXL_ENABLE_FUZZERS=OFF -DCXX_FUZZERS_SUPPORTED=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF -DJPEGXL_ENABLE_EXAMPLES=OFF -DJPEGXL_ENABLE_JNI=OFF -DJPEGXL_ENABLE_OPENEXR=OFF -DJPEGXL_ENABLE_SJPEG=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF -DBUILD_TESTING=OFF -DJPEGXL_ENABLE_TOOLS=OFF"
-
-    # if not syscmd(f"cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DJPEGXL_STATIC=ON -DJPEGXL_ENABLE_FUZZERS=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF -DBUILD_TESTING=0.", "Failed to run cmake"):
-    # if not syscmd(f"cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=ON -DJPEGXL_STATIC=ON -DJPEGXL_ENABLE_FUZZERS=OFF -DJPEGXL_ENABLE_DOXYGEN=OFF -DJPEGXL_ENABLE_MANPAGES=OFF -DJPEGXL_ENABLE_BENCHMARK=OFF -DBUILD_TESTING=OFF", "Failed to run cmake"):
-    if not syscmd(f"cmake -B build -DCMAKE_BUILD_TYPE=Release {defines}", "Failed to run cmake"):
-        return
-
-    #print("Building jxl - RelWithDebInfo\n")
-    #if not syscmd(f"cmake --build ./build --config RelWithDebInfo", "Failed to build in RelWithDebInfo"):
-    #    return
-
-    print("Building jxl - Release\n")
-    if not syscmd(f"cmake --build ./build --config Release --parallel", "Failed to build in Release"):
-        return
-
-    #print("Building jxl - Debug\n")
-    #if not syscmd(f"cmake --build ./build --config Debug", "Failed to build in Debug"):
-    #    return
-
-
-# =================================================================================================
 
 def get_latest_mpv_release():
     api_url = "https://api.github.com/repos/shinchiro/mpv-winbuild-cmake/releases/latest"
@@ -504,6 +286,49 @@ def get_latest_mpv_release():
     return None, None
 # Fetch the dynamic url and filename
 mpv_url, mpv_file = get_latest_mpv_release()
+
+def get_latest_jxl_release():
+    api_url = "https://api.github.com/repos/libjxl/libjxl/releases"
+    req = Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+    
+    try:
+        response = urlopen(req, timeout=30)
+        data = json.loads(response.read().decode('utf-8'))
+        
+        for release in data:
+            if release.get('tag_name', '').startswith('v0.12.'):
+                for asset in release.get('assets', []):
+                    name = asset.get('name', '')
+                    if name == 'jxl-x64-windows.7z':
+                        return asset.get('browser_download_url'), name
+                        
+    except Exception as e:
+        print(f"Error fetching latest libjxl release from GitHub API: {e}")
+        
+    return None, None
+
+jxl_url, jxl_file = get_latest_jxl_release()
+
+def get_latest_zlibng_release():
+    api_url = "https://api.github.com/repos/zlib-ng/zlib-ng/releases/latest"
+    req = Request(api_url, headers={'User-Agent': 'Mozilla/5.0'})
+    
+    try:
+        response = urlopen(req, timeout=30)
+        data = json.loads(response.read().decode('utf-8'))
+        
+        # 'data' is the single latest release dictionary
+        for asset in data.get('assets', []):
+            name = asset.get('name', '')
+            if name == 'zlib-ng-win-x86-64-compat.zip':
+                return asset.get('browser_download_url'), name
+                        
+    except Exception as e:
+        print(f"Error: {e}")
+        
+    return None, None
+
+zlib_url, zlib_file = get_latest_zlibng_release()
 
 # =================================================================================================
 
@@ -535,56 +360,6 @@ Basic Structure for a task here:
 
 
 TASK_LIST = {
-    # All Platforms
-    OS.Any: [
-        {
-            "name": "freetype",
-            "url":  "https://nongnu.askapache.com/freetype/freetype-2.14.1.tar.xz",
-            "file": "freetype-2.14.1.tar.xz",
-            "func": post_freetype_extract,
-        },
-        # {
-        #     "name": "mozjpeg",
-        #     "url":  "https://github.com/mozilla/mozjpeg/archive/refs/tags/v4.1.1.zip",
-        #     "file": "mozjpeg-4.1.1.zip",
-        #     "func": post_mozjpeg_extract,
-        # },
-        {
-            "name": "libjpeg-turbo",
-            "url":  "https://github.com/libjpeg-turbo/libjpeg-turbo/archive/refs/tags/3.2.0.zip",
-            "file": "libjpeg-turbo-3.2.0.zip",
-            "func": post_jpeg_extract,
-        },
-        {
-            "name": "zlib-ng",
-            "url":  "https://github.com/zlib-ng/zlib-ng/archive/refs/tags/2.2.5.zip",
-            "file": "zlib-ng-2.2.5.zip",
-            "func": post_zlib_extract,
-        },
-        {
-            "name": "libspng",
-            "url":  "https://github.com/randy408/libspng/archive/v0.7.4.zip",
-            "file": "libspng-0.7.4.zip",
-            "func": post_libspng_extract,
-        },
-        {
-            "name": "nativefiledialog",
-            "url":  "https://github.com/btzy/nativefiledialog-extended/archive/refs/tags/v1.2.1.zip",
-            "file": "nativefiledialog-extended-1.2.1.zip",
-            "func": compile_nativefiledialog,
-        },
-        {
-            "name": "libfyaml",
-            "url":  "https://github.com/pantoniou/libfyaml/releases/download/v1.0.0-alpha8/libfyaml-1.0.0-alpha8.tar.gz",
-            "file": "libfyaml-1.0.0-alpha8.tar.gz",
-            "func": compile_libfyaml,
-        },
-        {
-            "name": "jxl",
-            "func": libjxl_run,
-        },
-    ],
-
     # Windows Only
     OS.Windows: [
 
@@ -610,8 +385,19 @@ TASK_LIST = {
             "name": "mpv",
             "url":  mpv_url,
             "file": mpv_file,
-            "extracted_folder": "mpv",
-            "user_extract": True,
+            "extract_folder": "mpv",
+        },
+        {
+            "name": "libjxl",
+            "url":  jxl_url,
+            "file": jxl_file,
+            "extract_folder": "libjxl",
+        },
+        {
+            "name": "zlib-ng",
+            "url":  zlib_url,
+            "file": zlib_file,
+            "extract_folder": "zlib-ng",
         },
     ],
 
@@ -657,6 +443,49 @@ def write_file(file: str, file_data: bytes) -> bool:
     return True
 
 
+def get_7z():
+    path_7z = shutil.which("7z.exe")
+    if path_7z:
+        return path_7z
+        
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\7-Zip") as key:
+            install_location, _ = winreg.QueryValueEx(key, "InstallLocation")
+            path_7z = os.path.join(install_location, "7z.exe")
+            if os.path.exists(path_7z):
+                return path_7z
+    except Exception:
+        pass
+        
+    fallback7z = os.path.join(ROOT_DIR, "7z", "7zr.exe")
+    if os.path.exists(fallback7z):
+        return fallback7z
+        
+    return None
+
+
+def check_7z():
+    path_7z = get_7z()
+    if not path_7z:
+        fallback7z = os.path.join(ROOT_DIR, "7z", "7zr.exe")
+        fallback_dir = os.path.dirname(fallback7z)
+        if not os.path.exists(fallback_dir):
+            os.makedirs(fallback_dir)
+            
+        print_color(Color.GREEN, "Downloading 7zr.exe")
+        
+        file_data = download_file("https://www.7-zip.org/a/7zr.exe")
+        if file_data != b"":
+            write_file(fallback7z, file_data)
+            return fallback7z
+        else:
+            error("Failed to download 7zr.exe")
+            return None
+    else:
+        return path_7z
+
+
 def extract_file_user(file: str, folder: str) -> bool:
     # play bell/error sound
     print("\007")
@@ -680,8 +509,10 @@ def extract_file(tmp_file: str, file_ext: str, tmp_folder: str, folder: str, use
         return_value = extract_file_user(tmp_file, tmp_folder)
     else:
         if file_ext == "7z":
-            py7zr.unpack_7zarchive(tmp_file, folder)
-            return_value = True
+            path_7z = check_7z()
+            if path_7z:
+                syscall([path_7z, "x", tmp_file, f"-o{folder}", "-y"], "Failed to extract 7z archive")
+                return_value = True
         elif file_ext == "xz":
             with tarfile.open(tmp_file, "r:xz") as tar:
                 tar.extractall(path=folder)
@@ -786,10 +617,6 @@ def main():
 
     print("\n---------------------------------------------------------\n")
 
-    # Do all platforms last
-    for item in TASK_LIST[OS.Any]:
-        handle_item(item)
-        reset_dir()
 
     # check for any errors and print them
     errors_str = "Error" if len(ERROR_LIST) == 1 else "Errors"
