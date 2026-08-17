@@ -8,24 +8,45 @@
 
 ## Build Requirements
 
-- CMake
+- CMake 3.20+
 - Python 3
-- py7zr Python Module
+- Visual Studio 2022+ (Windows only)
 
-### Windows
-- Visual Studio 2022+ For Windows
+The build system will automatically download and configure most dependencies via a combination of a Python script and CMake's `FetchContent`. 
 
-### Linux
-- libmpv
-- SDL3
-- freetype
+### System Dependencies
+
+If you prefer to install dependencies globally via a package manager rather than letting CMake fetch and build them from source, the full list of libraries used is:
+- `libmpv` (Must be installed globally on Linux)
+- `SDL3`
+- `libjpeg-turbo`
+- `libjxl`
+- `libfyaml`
+- `freetype` (freetype2)
+- `libspng`
+- `nativefiledialog` (nfd)
+- `FreeImage`
+- `libheif`
 
 ## Building
-- Enter the `thirdparty` folder, and run the `thirdparty.bat` script to download and compile thirdparty stuff
-- On Linux, you may need to run `linux_prepare_python.sh`, which makes a python virtual environment, and installs py7zr to it, then run `thirdparty.sh`
-- If all succeeded, return to the root folder
-- Make a folder called `build` and enter it
-- Enter that folder and in cmd or the terminal, run `cmake ..`
-- On Windows, open media_tag_system.sln and build the project
-- On Linux, run `cmake --build`, or whatever else you want to build it with, like `make -j8` or ninja
-- The program will be in the `out` folder, ready to run
+
+### Linux
+Open a terminal and run:
+```bash
+cd thirdparty
+./thirdparty.sh
+cd ..
+cmake -B build . && cmake --build build --config Release --parallel
+```
+
+### Windows
+Open the **x64 Native Tools Command Prompt for VS** and run:
+```cmd
+cd thirdparty
+thirdparty.cmd
+cd ..
+cmake_run.cmd
+```
+Or just `cmake -B build .` and open media_tag_system.sln and build from there
+
+The compiled binaries will be placed in the `out/` folder, ready to run.
